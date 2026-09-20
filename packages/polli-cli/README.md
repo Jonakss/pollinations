@@ -131,6 +131,19 @@ Creating an agent also creates its callable model listing. See [Publish an Agent
 
 `polli auth login` creates a key with all account permissions Polli needs: `profile`, `usage`, and `keys`. Use `account:usage` for narrow read-only account state like usage and quests. Use `account:keys` to manage keys and, where invite-only My Models access is enabled, my-models. Quest claiming remains in the dashboard.
 
+## MCP servers
+
+Install hosted Pollinations MCP servers (read live from `GET /mcp`) into coding agents with dedicated keys:
+
+```bash
+polli mcp install claude-code                  # install all live MCP servers into Claude Code
+polli mcp install opencode pollinations ffmpeg  # install specific servers
+polli mcp status                               # view installed Pollinations MCP servers per client
+polli mcp off opencode                         # remove Pollinations MCP servers and restore config
+```
+
+Supported clients: `claude-code`, `codex`, `vscode`, `cursor`, `opencode`, `gemini`, `copilot-cli`, `windsurf`, `cline`, `amp`, `kiro`, `zed`, `warp`.
+
 ## Coding harnesses
 
 Point an agentic coding tool at Pollinations. `on` logs in if needed, mints a
