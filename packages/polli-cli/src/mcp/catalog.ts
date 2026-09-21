@@ -1,6 +1,5 @@
 import { ApiError, gen } from "../lib/api.js";
 import { OWNERSHIP_URL } from "../lib/config.js";
-import { BASE_URL } from "../lib/config.js";
 
 export interface McpCatalogServer {
     id: string;

@@ -1,4 +1,3 @@
-import type { McpCatalogServer } from "./catalog.js";
 import { OWNERSHIP_URL } from "../lib/config.js";
 
 /**

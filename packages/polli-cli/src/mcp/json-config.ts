@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import JSON5 from "json5";
 import {
     readTextIfExists,
@@ -9,7 +7,7 @@ import {
 import type { HarnessContext } from "../harnesses/types.js";
 import type { McpCatalogServer } from "./catalog.js";
 import { entryName, isOwnedEntry } from "./entries.js";
-import type { McpClient, McpEntryRef } from "./types.js";
+import type { McpClient } from "./types.js";
 
 export const readJson = (
     path: string,
@@ -17,6 +15,7 @@ export const readJson = (
 ): Record<string, unknown> | null => {
     const text = readTextIfExists(path);
     if (text === null) return null;
+    if (text.trim() === "") return {};
     try {
         const parsed = JSON5.parse(text);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -96,31 +95,6 @@ export const entryFor = (
  */
 export const jsonClient = (spec: JsonClientSpec): McpClient => {
     const path = (ctx: HarnessContext) => spec.configPath(ctx);
-    const withServers = (
-        ctx: HarnessContext,
-        mutate: (
-            servers: Record<string, Record<string, unknown>>,
-        ) => Record<string, Record<string, unknown>> | null,
-    ): Record<string, Record<string, unknown>> | null => {
-        const config = readJson(path(ctx), spec.label);
-        if (config === null) return null;
-        const current = serversMap(config, spec.envelopeKey);
-        const next = mutate(
-            Object.fromEntries(
-                Object.entries(current).filter(([, entry]) => isMap(entry)),
-            ) as Record<string, Record<string, unknown>>,
-        );
-        if (next === null) return null;
-        if (Object.keys(next).length === 0) delete config[spec.envelopeKey];
-        else config[spec.envelopeKey] = next;
-        spec.finalize?.(config);
-        writeTextAtomic(
-            path(ctx),
-            `${JSON.stringify(config, null, 2)}\n`,
-            0o600,
-        );
-        return next;
-    };
     return {
         id: spec.id,
         label: spec.label,

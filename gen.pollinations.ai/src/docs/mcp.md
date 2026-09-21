@@ -98,8 +98,16 @@ polli mcp off opencode ffmpeg
 
 Clients supported: `claude-code`, `codex` (bearer token via `POLLI_MCP_CODEX_API_KEY`
 in `$CODEX_HOME/.env`), `vscode` (current workspace `.vscode/mcp.json`, key via
-prompt input), `cursor`, `opencode`, `gemini`, `copilot-cli`, `windsurf`,
-`cline`, `amp`, `kiro`, `zed`, `warp`.
+prompt input), `cursor`, `opencode`, `gemini`, `copilot-cli` (`~/.copilot/mcp-config.json`,
+tools `["*"]`), `windsurf`, `cline`, `amp` (`amp.mcpServers` in
+`~/.config/amp/settings.json`), `kiro` (`~/.kiro/settings/mcp.json`), `zed`
+(`context_servers` in `~/.config/zed/settings.json`), `warp` (`~/.warp/.mcp.json`).
+Config
+formats are written per client (Claude Code `type: http`, Gemini `httpUrl`,
+Windsurf `serverUrl`, Cline `streamableHttp`); the installer is idempotent,
+strips only entries whose URL lives under `gen.pollinations.ai`, and keeps a
+snapshot so `off` can restore the file exactly as it was before the first
+install.
 
 ### Pollinations MCP
 

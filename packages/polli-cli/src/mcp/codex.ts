@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import * as toml from "smol-toml";
 import { readTextIfExists, writeTextAtomic } from "../harnesses/fs.js";
@@ -6,7 +6,7 @@ import type { HarnessContext } from "../harnesses/types.js";
 import { OWNERSHIP_URL } from "../lib/config.js";
 import type { McpCatalogServer } from "./catalog.js";
 import { entryName, serverIdOf } from "./entries.js";
-import type { McpClient, McpEntryRef } from "./types.js";
+import type { McpClient } from "./types.js";
 
 export const CODEX_ENV_VAR = "POLLI_MCP_CODEX_API_KEY";
 
@@ -118,10 +118,10 @@ export const codexPostInstall = (ctx: HarnessContext, apiKey: string) => {
         : [];
     writeTextAtomic(
         path,
-        [
+        `${[
             ...lines.filter((line) => line.trim() !== ""),
             `${CODEX_ENV_VAR}=${apiKey}`,
-        ].join("\n") + "\n",
+        ].join("\n")}\n`,
         0o600,
     );
     return [

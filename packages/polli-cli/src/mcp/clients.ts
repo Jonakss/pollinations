@@ -1,9 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { HarnessContext } from "../harnesses/types.js";
-import { jsonClient } from "./json-config.js";
 import { codex } from "./codex.js";
-import { VS_CODE_INPUT_ID } from "./json-config.js";
+import { jsonClient, VS_CODE_INPUT_ID } from "./json-config.js";
 
 /** User-scope Claude Code config (~/.claude.json) holds the mcpServers map. */
 const claudeCode: McpClient = jsonClient({
@@ -126,21 +125,27 @@ const vscode: McpClient = jsonClient({
                       ),
               )
             : [];
-        config.inputs = [
-            ...inputs,
-            {
-                type: "promptString",
-                id: VS_CODE_INPUT_ID,
-                description: "Pollinations API key",
-                password: true,
-            },
-        ];
+        const serversStr = JSON.stringify(config.servers ?? {});
+        const needsInput = serversStr.includes(`\${input:${VS_CODE_INPUT_ID}}`);
+        if (needsInput) {
+            config.inputs = [
+                ...inputs,
+                {
+                    type: "promptString",
+                    id: VS_CODE_INPUT_ID,
+                    description: "Pollinations API key",
+                    password: true,
+                },
+            ];
+        } else if (inputs.length > 0) {
+            config.inputs = inputs;
+        } else {
+            delete config.inputs;
+        }
     },
 });
 
-import type { McpClient } from "./types.js";
-
-/** GitHub Copilot CLI (~/.copilot/mcp-config.json) uses mcpServers envelope key and tools: ["*"]. */
+/** Copilot CLI (~/.copilot/mcp-config.json): mcpServers with type http + tools ["*"]. */
 const copilotCli: McpClient = jsonClient({
     id: "copilot-cli",
     label: "GitHub Copilot CLI",
@@ -154,25 +159,20 @@ const copilotCli: McpClient = jsonClient({
     configPath: (ctx) => join(ctx.home, ".copilot", "mcp-config.json"),
 });
 
-/** Amp (~/.config/amp/mcp.json or ~/.amp/mcp.json). */
+/** Amp keeps MCP under the literal "amp.mcpServers" key in settings.json. */
 const amp: McpClient = jsonClient({
     id: "amp",
     label: "Amp",
-    description: "Install Pollinations MCP servers into Amp.",
+    description:
+        "Install Pollinations MCP servers into Amp (~/.config/amp/settings.json).",
     restartHint: "Restart Amp.",
-    envelopeKey: "mcpServers",
+    envelopeKey: "amp.mcpServers",
     urlField: "url",
-    typeField: { name: "type", value: "http" },
     secretMode: "literal",
-    configPath: (ctx) => {
-        const primary = join(ctx.home, ".config", "amp", "mcp.json");
-        return existsSync(primary)
-            ? primary
-            : join(ctx.home, ".amp", "mcp.json");
-    },
+    configPath: (ctx) => join(ctx.home, ".config", "amp", "settings.json"),
 });
 
-/** Kiro (~/.kiro/mcp.json). */
+/** Kiro: ~/.kiro/settings/mcp.json, remote entries are {url, headers}. */
 const kiro: McpClient = jsonClient({
     id: "kiro",
     label: "Kiro",
@@ -180,12 +180,11 @@ const kiro: McpClient = jsonClient({
     restartHint: "Restart Kiro.",
     envelopeKey: "mcpServers",
     urlField: "url",
-    typeField: { name: "type", value: "http" },
     secretMode: "literal",
-    configPath: (ctx) => join(ctx.home, ".kiro", "mcp.json"),
+    configPath: (ctx) => join(ctx.home, ".kiro", "settings", "mcp.json"),
 });
 
-/** Zed (~/.config/zed/settings.json) uses context_servers. */
+/** Zed: context_servers in ~/.config/zed/settings.json, entries are {url, headers}. */
 const zed: McpClient = jsonClient({
     id: "zed",
     label: "Zed",
@@ -193,12 +192,11 @@ const zed: McpClient = jsonClient({
     restartHint: "Restart Zed.",
     envelopeKey: "context_servers",
     urlField: "url",
-    typeField: { name: "type", value: "http" },
     secretMode: "literal",
     configPath: (ctx) => join(ctx.home, ".config", "zed", "settings.json"),
 });
 
-/** Warp (~/.warp/mcp.json or ~/.config/warp/mcp.json). */
+/** Warp file-based config lives at ~/.warp/.mcp.json (note the leading dot). */
 const warp: McpClient = jsonClient({
     id: "warp",
     label: "Warp",
@@ -206,16 +204,13 @@ const warp: McpClient = jsonClient({
     restartHint: "Restart Warp.",
     envelopeKey: "mcpServers",
     urlField: "url",
-    typeField: { name: "type", value: "http" },
     secretMode: "literal",
-    configPath: (ctx) => {
-        const primary = join(ctx.home, ".warp", "mcp.json");
-        return existsSync(primary)
-            ? primary
-            : join(ctx.home, ".config", "warp", "mcp.json");
-    },
+    configPath: (ctx) => join(ctx.home, ".warp", ".mcp.json"),
 });
 
+import type { McpClient } from "./types.js";
+
+/** Order follows the issue's priority list (row 1, then row 2). */
 export const MCP_CLIENTS: McpClient[] = [
     claudeCode,
     codex,

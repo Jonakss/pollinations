@@ -17,18 +17,19 @@ vi.mock("./catalog.js", async (importOriginal) => {
     const mod = await importOriginal<typeof import("./catalog.js")>();
     return { ...mod, fetchCatalog: async () => catalog };
 });
+
+import { applyWithSnapshot, restoreOrStrip } from "../harnesses/snapshot.js";
+import type { HarnessContext } from "../harnesses/types.js";
+import type { McpCatalogServer } from "./catalog.js";
 import {
+    CODEX_ENV_VAR,
     codex,
     codexConfigPath,
     codexEnvPath,
     codexPostInstall,
     codexPostStrip,
-    CODEX_ENV_VAR,
 } from "./codex.js";
-import { entryName, clobberedNames, ownedNames } from "./entries.js";
-import { applyWithSnapshot, restoreOrStrip } from "../harnesses/snapshot.js";
-import type { HarnessContext } from "../harnesses/types.js";
-import type { McpCatalogServer } from "./catalog.js";
+import { clobberedNames, entryName, ownedNames } from "./entries.js";
 
 const KEY = "sk_polli_test_key_1234567890";
 const URL_BASE = "https://gen.pollinations.ai";
@@ -154,6 +155,21 @@ describe("json envelope clients", () => {
         }
     });
 
+    it("cline writes the camelCase streamableHttp type", () => {
+        const client = clientById("cline");
+        client.writeServers(
+            ctx,
+            client.entries(catalog, KEY) as Record<
+                string,
+                Record<string, unknown>
+            >,
+        );
+        const servers = client.readServers(ctx) ?? {};
+        expect((servers.pollinations as Record<string, unknown>).type).toBe(
+            "streamableHttp",
+        );
+    });
+
     it("copilot-cli writes tools: ['*'] in entries", () => {
         const client = clientById("copilot-cli");
         client.writeServers(
@@ -169,7 +185,42 @@ describe("json envelope clients", () => {
         expect(entry.tools).toEqual(["*"]);
     });
 
-    it("zed uses context_servers key in settings.json", () => {
+    it("amp nests servers under the dotted amp.mcpServers key in settings.json", () => {
+        const client = clientById("amp");
+        client.writeServers(
+            ctx,
+            client.entries(catalog, KEY) as Record<
+                string,
+                Record<string, unknown>
+            >,
+        );
+        const config = JSON.parse(read(client.files(ctx)[0]));
+        expect(config["amp.mcpServers"].pollinations.url).toBe(
+            `${URL_BASE}/mcp/pollinations`,
+        );
+        expect(config["amp.mcpServers"].pollinations.type).toBeUndefined();
+    });
+
+    it("kiro targets ~/.kiro/settings/mcp.json without a type field", () => {
+        const client = clientById("kiro");
+        expect(client.files(ctx)[0]).toBe(
+            join(home, ".kiro", "settings", "mcp.json"),
+        );
+        client.writeServers(
+            ctx,
+            client.entries(catalog, KEY) as Record<
+                string,
+                Record<string, unknown>
+            >,
+        );
+        const config = JSON.parse(read(client.files(ctx)[0]));
+        expect(config.mcpServers.pollinations.url).toBe(
+            `${URL_BASE}/mcp/pollinations`,
+        );
+        expect(config.mcpServers.pollinations.type).toBeUndefined();
+    });
+
+    it("zed uses context_servers with plain url + headers", () => {
         const client = clientById("zed");
         client.writeServers(
             ctx,
@@ -182,10 +233,15 @@ describe("json envelope clients", () => {
         expect(config.context_servers.pollinations.url).toBe(
             `${URL_BASE}/mcp/pollinations`,
         );
+        expect(config.context_servers.pollinations.type).toBeUndefined();
+        expect(config.context_servers.pollinations.headers.Authorization).toBe(
+            `Bearer ${KEY}`,
+        );
     });
 
-    it("cline writes the camelCase streamableHttp type", () => {
-        const client = clientById("cline");
+    it("warp targets ~/.warp/.mcp.json without a type field", () => {
+        const client = clientById("warp");
+        expect(client.files(ctx)[0]).toBe(join(home, ".warp", ".mcp.json"));
         client.writeServers(
             ctx,
             client.entries(catalog, KEY) as Record<
@@ -194,9 +250,8 @@ describe("json envelope clients", () => {
             >,
         );
         const servers = client.readServers(ctx) ?? {};
-        expect((servers.pollinations as Record<string, unknown>).type).toBe(
-            "streamableHttp",
-        );
+        expect(servers.pollinations.type).toBeUndefined();
+        expect(servers.pollinations.url).toBe(`${URL_BASE}/mcp/pollinations`);
     });
 
     it("is idempotent: reinstalling does not duplicate entries", () => {
@@ -286,7 +341,10 @@ describe("json envelope clients", () => {
         );
         expect(
             config.servers["pollinations-ffmpeg"].headers.Authorization,
-        ).toBe("${input:pollinations-api-key}");
+        ).toBe(
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code input reference
+            "${input:pollinations-api-key}",
+        );
         expect(
             config.inputs.some(
                 (input: { id?: string }) => input.id === "pollinations-api-key",
@@ -294,6 +352,38 @@ describe("json envelope clients", () => {
         ).toBe(true);
         // No literal key written in the file.
         expect(read(client.files(ctx)[0])).not.toContain(KEY);
+    });
+
+    it("handles 0-byte or whitespace-only config file as empty config", () => {
+        const client = clientById("claude-code");
+        const configPath = client.files(ctx)[0];
+        writeWithDir(configPath, "   \n ");
+        expect(client.readServers(ctx)).toEqual({});
+        client.writeServers(
+            ctx,
+            client.entries(catalog, KEY) as Record<
+                string,
+                Record<string, unknown>
+            >,
+        );
+        expect(Object.keys(client.readServers(ctx) ?? {}).length).toBe(3);
+    });
+
+    it("vscode removes registered prompt input from inputs array when off is run", async () => {
+        const client = clientById("vscode");
+        client.writeServers(
+            ctx,
+            client.entries(catalog, KEY) as Record<
+                string,
+                Record<string, unknown>
+            >,
+        );
+        let config = JSON.parse(read(client.files(ctx)[0]));
+        expect(config.inputs).toBeDefined();
+
+        await offMcp(ctx, "vscode", undefined);
+        config = JSON.parse(read(client.files(ctx)[0]));
+        expect(config.inputs).toBeUndefined();
     });
 
     it("vscode configPath honours VSCODE_MCP_CONFIG", () => {
